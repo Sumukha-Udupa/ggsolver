@@ -6,20 +6,25 @@ Cell = namedtuple("Cell", ["row", "col"])
 State = namedtuple("State", ["pol_pos", "pol_time", "lion_pos"])
 State_n = namedtuple("State_n", ["state", "belief", "action", "sigma"])
 
+jungle_cells = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 1), (1, 2), (2, 2), (3, 2), (4, 3), (3, 3),
+                (2, 3), (3, 4), (4, 4)]
+
 
 class PolicePoachers(SG_PCOF):
     NODE_PROPERTY = SG_PCOF.NODE_PROPERTY.copy()
     EDGE_PROPERTY = SG_PCOF.EDGE_PROPERTY.copy()
     GRAPH_PROPERTY = SG_PCOF.GRAPH_PROPERTY.copy()
 
-    def __init__(self, grows, gcols, lion_pos, police_pos, police_time, sensor_1_pos, sensor_1_dim, sensor_2_pos,
-                 sensor_2_dim, sensor_3_pos, sensor_3_dim, sensor_4_pos, sensor_4_dim, sensor_5_pos, sensor_5_dim,
-                 sensor_6_pos, sensor_6_dim, final_pos):
+    def __init__(self, grows, gcols, lion_pos, police_pos, police_time, sensors, sensor_pos, sensor_dim,
+                 jungle_cells, p1_actions, p1_query, p2_attack, final_pos):
         super(PolicePoachers, self).__init__()
         # TODO. Define parameters to construct the game.
         # Gridworld dimensions.
         self.g_num_rows = grows
         self.g_num_cols = gcols
+
+        # Player 1 actions - dictionary
+        self.p1_actions = p1_actions
 
         # Lion initial position.
         self.lion_init_pos = lion_pos
@@ -28,30 +33,31 @@ class PolicePoachers(SG_PCOF):
         self.police_init_pos = police_pos
         self.police_time = police_time
 
-        # Sensor position
-        self.sensor_pos = dict()
-        self.sensor_pos[1] = sensor_1_pos
-        self.sensor_pos[2] = sensor_2_pos
-        self.sensor_pos[3] = sensor_3_pos
-        self.sensor_pos[4] = sensor_4_pos
-        self.sensor_pos[5] = sensor_5_pos
-        self.sensor_pos[6] = sensor_6_pos
+        # number of sensors
+        self.sensors = sensors
 
-        # Sensor dimensions
-        self.sensor_dim = dict()
-        self.sensor_dim[1] = sensor_1_dim
-        self.sensor_dim[2] = sensor_2_dim
-        self.sensor_dim[3] = sensor_3_dim
-        self.sensor_dim[4] = sensor_4_dim
-        self.sensor_dim[5] = sensor_5_dim
-        self.sensor_dim[6] = sensor_6_dim
+        # Sensor position - dictionary
+        self.sensor_pos = sensor_pos
+
+        # Sensor dimensions - dictionary
+        self.sensor_dim = sensor_dim
 
         # Area covered by the Jungle
-        self.cells_covered_by_jungle = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 1), (1, 2), (2, 2), (3, 2), (4, 3), (3, 3),
-                                        (2, 3), (3, 4), (4, 4)]
+        self.jungle_cells = jungle_cells
 
         # Goal position
         self.final_position = final_pos
+
+        # States of the game
+        self._states = self.states()
+
+        # P1 sensor queries - dict
+        self.sensor_queries = p1_query
+        self._sensor_queries = self.sensor_queries
+
+        # P2 attack actions
+        self.sensor_attack = p2_attack
+        self._sensor_attack_actions = self.sensor_attack
 
     def states(self):
         """
@@ -60,9 +66,8 @@ class PolicePoachers(SG_PCOF):
         # TODO. Use parameters to define the states of the game.
 
         state_list = []
-
         for p_pos, p_time, l_pos in itertools.product(itertools.product(range(self.g_num_rows), range(self.g_num_cols)),
-                                                      range(self.police_time + 1), self.cells_covered_by_jungle):
+                                                      range(self.police_time + 1), self.jungle_cells):
             state_list.append(State(Cell(p_pos[0], p_pos[1]), p_time, Cell(l_pos[0], l_pos[1])))
 
         return state_list
@@ -70,40 +75,28 @@ class PolicePoachers(SG_PCOF):
     def actions(self):
         """
         Returns a tuple of set of P1 and P2 actions in the game.
-        Format: ($A \times \Sigma$, $\calB$)
+        Format: ($A$)
         """
-        player_1_actions = dict()
-        player_1_actions['N'] = [1, 0]
-        player_1_actions['S'] = [-1, 0]
-        player_1_actions['E'] = [0, 1]
-        player_1_actions['W'] = [0, -1]
+        player_1_actions = list()
+        for key, value in self.p1_actions:
+            player_1_actions.append(key)
 
         return player_1_actions
 
     # @register_property(GRAPH_PROPERTY)
     def p1_query_actions(self):
         # TODO: make this into parameters.
-        query_actions = dict()
-        query_actions[1] = {1, 2}
-        query_actions[2] = {2, 3}
-        query_actions[3] = {3, 4}
-        query_actions[4] = {4, 5}
-        query_actions[5] = {5, 6}
-
+        query_actions = list()
+        for key, value in self.sensor_queries:
+            query_actions.append(value)
         return query_actions
 
     def p2_attack_actions(self):
         # TODO: make this into parameters.
-        attack_actions = dict()
-        attack_actions[1] = {1}
-        attack_actions[2] = {2}
-        attack_actions[3] = {3}
-        attack_actions[4] = {4}
-        attack_actions[5] = {5}
-        attack_actions[6] = {6}
-        attack_actions[7] = {}
+        attack_actions = list()
+        for key, value in self.sensor_attack:
+            attack_actions.append(value)
         return attack_actions
-
 
     def lion_actions(self):
         lion_actions = dict()
@@ -113,26 +106,25 @@ class PolicePoachers(SG_PCOF):
         lion_actions['W'] = [0, -1]
         return lion_actions
 
-    def boundary_gw(self, p1_state):
+    def bouncy_boundary_gw(self, p1_state):
         return max(min(p1_state.row, self.g_num_rows), 0), max(min(p1_state.col, self.g_num_cols), 0)
 
-    def boundary_jungle(self, p3_state, act):
+    def bouncy_boundary_jungle(self, p3_state, act):
         state = (p3_state.row, p3_state.col)
-        if state in self.cells_covered_by_jungle:
+        if state in self.jungle_cells:
             new_state = p3_state
         else:
-            new_state = Cell(p3_state.row-act[0], p3_state.col-act[1])
+            new_state = Cell(p3_state.row - act[0], p3_state.col - act[1])
         return new_state
 
     def apply_delta_p1(self, state, act):
 
-        p1_acts = self.actions()
+        p1_acts = self.p1_actions
         new_p1_state = Cell(state.pol_pos.row + p1_acts[act][0], state.pol_pos.col + p1_acts[act][1])
 
-        new_p1_state = self.boundary_gw(new_p1_state)
+        new_p1_state = self.bouncy_boundary_gw(new_p1_state)
 
         return new_p1_state
-
 
     def apply_delta_p3(self, state):
 
@@ -140,7 +132,7 @@ class PolicePoachers(SG_PCOF):
         lion_actions = self.lion_actions()
         for i in lion_actions:
             new_state = Cell(state.lion_pos.row + lion_actions[i][0], state.lion_pos.col + lion_actions[i][1])
-            new_state = self.boundary_jungle(new_state, lion_actions[i])
+            new_state = self.bouncy_boundary_jungle(new_state, lion_actions[i])
             new_p3_state.append(new_state)
 
         return new_p3_state
@@ -152,20 +144,15 @@ class PolicePoachers(SG_PCOF):
         """
 
         new_states = list()
-
-        if state.pol_time == 0:
-            new_states.append(state)
-
-        else:
-            nstate_time = state.pol_time - 1
-            nstate_p1   = self.apply_delta_p1(state, act)
-            nstate_p3   = self.apply_delta_p3(state)
-            for i in nstate_p3:
-                # if the police position is the same as the lion's position, new_state = old_state.
-                if nstate_p1 == i:
-                    new_states.append(state)
-                else:
-                    new_states.append(State(nstate_p1, nstate_time, i))
+        nstate_time = state.pol_time - 1
+        nstate_p1 = self.apply_delta_p1(state, act)
+        nstate_p3 = self.apply_delta_p3(state)
+        for i in nstate_p3:
+            # if the police position is the same as the lion's position, new_state = old_state.
+            if state.pol_pos == state.lion_pos or nstate_time < 0:
+                new_states.append(state)
+            else:
+                new_states.append(State(nstate_p1, nstate_time, i))
 
         return new_states
 
@@ -173,13 +160,13 @@ class PolicePoachers(SG_PCOF):
         """
         Returns a set of final states.
         """
-        return True if state in self.final_position else False
+        return True if state.pol_pos in self.final_position else False
 
     def sensors(self):
         """
-        Returns a set of sensors.
+        Returns a list of sensors.
         """
-        sensor_list = [1, 2, 3, 4, 5, 6]
+        sensor_list = range(1, self.sensors+1)
         return sensor_list
 
     def sensor_range(self, sensor):
@@ -195,11 +182,11 @@ class PolicePoachers(SG_PCOF):
         k = sensor_pos[0]
         m = sensor_pos[1]
 
-        for i in range(sensor_dim[1]-1):
-            for j in range(sensor_dim[0]-1):
-                cells_covered.add((k+1, m))
+        for i in range(sensor_dim[1] - 1):
+            for j in range(sensor_dim[0] - 1):
+                cells_covered.add((k + 1, m))
                 k = k + 1
-            cells_covered.add((k, m+1))
+            cells_covered.add((k, m + 1))
             m = m + 1
 
         return cells_covered
@@ -212,14 +199,14 @@ class PolicePoachers(SG_PCOF):
         query: A subset of sensors.
         attack: A subset of sensors.
         """
-        # TODO: implement the removal of repeted beliefs
+        # TODO: implement the removal of repeated beliefs
 
         # obs = {st for st in self._graph.nodes() if st.uav_pos == state.uav_pos and st.uav_batt == state.uav_batt}
-        obs = self.states()
+        obs = self._states
         obs = {st for st in obs if st.pol_pos == state.pol_pos and st.pol_time == state.pol_time}
         # Considering the actions that are not attacked
-        sensor_queries = self.p1_sensor_query()
-        attack_actions = self.p2_attack_actions()
+        sensor_queries = self._sensor_queries
+        attack_actions = self._sensor_attack_actions
 
         if attack == 7:
             active_sensors = sensor_queries[query]
@@ -228,11 +215,11 @@ class PolicePoachers(SG_PCOF):
 
         # active_sensors = self._sensor_queries[sense_query] - self._sensor_attacks[attack_query]
 
-        for act in active_sensors:
-            if state in self.sensor_range(act):
-                obs = obs.intersection(self.sensor_range(act))
+        for active in active_sensors:
+            if state in self.sensor_range(active):
+                obs = obs.intersection(self.sensor_range(active))
             else:
-                obs = obs.intersection(set(self.states()).difference(self.sensor_range(act)))
+                obs = obs.intersection(set(self._states).difference(self.sensor_range(active)))
         return obs
 
 
