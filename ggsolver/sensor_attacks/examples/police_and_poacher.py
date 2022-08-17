@@ -6,8 +6,10 @@ Cell = namedtuple("Cell", ["row", "col"])
 State = namedtuple("State", ["pol_pos", "pol_time", "lion_pos"])
 State_n = namedtuple("State_n", ["state", "belief", "action", "sigma"])
 
-jungle_cells = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 1), (1, 2), (2, 2), (3, 2), (4, 3), (3, 3),
-                (2, 3), (3, 4), (4, 4)]
+# jungle_cells = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 1), (1, 2), (2, 2), (3, 2), (4, 3), (3, 3),
+#                 (2, 3), (3, 4), (4, 4)]
+
+jungle_cells = [(1, 1)]
 
 
 class PolicePoachers(SG_PCOF):
@@ -46,7 +48,7 @@ class PolicePoachers(SG_PCOF):
         self.jungle_cells = jungle_cells
 
         # Goal position
-        self.final_position = final_pos
+        self.final_position = Cell(final_pos[0], final_pos[1])
 
         # States of the game
         self._states = self.states()
@@ -65,7 +67,7 @@ class PolicePoachers(SG_PCOF):
         """
         # TODO. Use parameters to define the states of the game.
 
-        state_list = []
+        state_list = list()
         for p_pos, p_time, l_pos in itertools.product(itertools.product(range(self.g_num_rows), range(self.g_num_cols)),
                                                       range(self.police_time + 1), self.jungle_cells):
             state_list.append(State(Cell(p_pos[0], p_pos[1]), p_time, Cell(l_pos[0], l_pos[1])))
@@ -78,32 +80,32 @@ class PolicePoachers(SG_PCOF):
         Format: ($A$)
         """
         player_1_actions = list()
-        for key, value in self.p1_actions:
+        for key in self.p1_actions:
             player_1_actions.append(key)
 
         return player_1_actions
 
     # @register_property(GRAPH_PROPERTY)
-    def p1_query_actions(self):
+    def p1_sensor_query(self):
         # TODO: make this into parameters.
         query_actions = list()
-        for key, value in self.sensor_queries:
-            query_actions.append(value)
+        for key in self.sensor_queries:
+            query_actions.append(self.sensor_queries[key])
         return query_actions
 
-    def p2_attack_actions(self):
+    def p2_sensor_attack(self):
         # TODO: make this into parameters.
         attack_actions = list()
-        for key, value in self.sensor_attack:
-            attack_actions.append(value)
+        for key in self.sensor_attack:
+            attack_actions.append(self.sensor_attack[key])
         return attack_actions
 
     def lion_actions(self):
         lion_actions = dict()
         lion_actions['N'] = [1, 0]
-        lion_actions['S'] = [-1, 0]
-        lion_actions['E'] = [0, 1]
-        lion_actions['W'] = [0, -1]
+        # lion_actions['S'] = [-1, 0]
+        # lion_actions['E'] = [0, 1]
+        # lion_actions['W'] = [0, -1]
         return lion_actions
 
     def bouncy_boundary_gw(self, p1_state):
@@ -166,13 +168,14 @@ class PolicePoachers(SG_PCOF):
         """
         Returns a list of sensors.
         """
-        sensor_list = range(1, self.sensors+1)
+        sensor_list = range(1, self.sensors + 1)
         return sensor_list
 
     def sensor_range(self, sensor):
         """
         Returns the set of states covered by the given sensor.
         """
+        # TODO: Must test this extensively and change as needed.
         sensor_pos = self.sensor_pos[sensor]
         sensor_dim = self.sensor_dim[sensor]
 
@@ -183,10 +186,13 @@ class PolicePoachers(SG_PCOF):
         m = sensor_pos[1]
 
         for i in range(sensor_dim[1] - 1):
+            cells_covered.add((i, m + 1))
+
             for j in range(sensor_dim[0] - 1):
                 cells_covered.add((k + 1, m))
                 k = k + 1
             cells_covered.add((k, m + 1))
+
             m = m + 1
 
         return cells_covered
@@ -225,11 +231,56 @@ class PolicePoachers(SG_PCOF):
 
 if __name__ == "__main__":
     # Base game instance.
-    game = PolicePoachers()
-    graph = game.graphify()
-    graph.save("/path/to/file.game")
+    grows = 2
+    gcols = 2
+    lion_pos = [1, 1]
+    police_pos = [0, 0]
+    police_time = 2
+    sensors = 2
+
+    sensor_pos = dict()
+    sensor_pos[1] = [0, 0]
+    sensor_pos[2] = [0, 1]
+    # sensor_pos[3] = [2, 2]
+    # sensor_pos[4] = [2, 0]
+    # sensor_pos[5] = [0, 1]
+
+    sensor_dim = dict()
+    sensor_dim[1] = [1, 0]
+    sensor_dim[2] = [2, 2]
+    # sensor_dim[3] = [2, 2]
+    # sensor_dim[4] = [1, 0]
+    # sensor_dim[5] = [0, 1]
+
+    jungle_cells = jungle_cells
+
+    p1_actions = dict()
+    p1_actions["N"] = [1, 0]
+    # p1_actions["S"] = [-1, 0]
+    # p1_actions["E"] = [0, 1]
+    # p1_actions["W"] = [0, -1]
+
+    p1_query = dict()
+    p1_query[1] = {1, 2}
+    # p1_query[2] = {2, 3}
+    # p1_query[3] = {3, 4}
+    # p1_query[4] = {4, 5}
+    # p1_query[5] = {2, 5}
+
+    p2_attack = dict()
+    p2_attack[1] = {1}
+    # p2_attack[2] = {2}
+    # p2_attack[3] = {3}
+    # p2_attack[5] = {4}
+
+    final_pos = [1, 1]
+
+    game = PolicePoachers(grows, gcols, lion_pos, police_pos, police_time, sensors, sensor_pos, sensor_dim,
+                          jungle_cells, p1_actions, p1_query, p2_attack, final_pos)
+    # graph = game.graphify()
+    # graph.save("/path/to/file.game")
 
     # Belief game construction
     belief_game = BeliefGame(game)
-    belief_graph = belief_game.graphify()
-    belief_game.save("/path/to/file.game")
+    # belief_graph = belief_game.graphify()
+    # belief_game.save("/path/to/file.game")
