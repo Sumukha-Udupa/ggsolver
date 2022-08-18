@@ -11,4 +11,6 @@ build/
 
 cmake-build-debug/
 
-ggsolver/
+*/__pycache__/*
+
+*.pyc
