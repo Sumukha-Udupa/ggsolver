@@ -65,9 +65,9 @@ class BeliefGame(Game):
         self.game_actions = self.game.actions()
         self.sensor_query = self.game.sensor_queries
         self.sensor_attacks = self.game.sensor_attack
-        self.belief_game_actions = self.actions()
-        self.final_states = self.final_states_set()
-        self.states = self.states()
+        # self.belief_game_actions = self.actions()
+        # self.final_states = self.final_states_set()
+        # self._states = self.states()
 
 
     # def obs_list(self, belief):
@@ -175,10 +175,21 @@ class BeliefGame(Game):
         Q.append(final)
         return Q
 
+    def turn(self, state):
+        current_turn = 1
+        if state.action is None and state.sigma is None:
+            current_turn = 1
+        elif state.action is None and state.sigma is not None:
+            current_turn = 2
+        else:
+            current_turn = 3
+
+        return current_turn
+
     def actions(self):
         # P1 actions ($A x Sigma$)
         p1_actions = list()
-        p1_actions = itertools.product(self.game_actions, self.sensor_query)
+        p1_actions = list(itertools.product(self.game_actions, self.sensor_query))
         return p1_actions
 
     def final(self, state):
@@ -195,6 +206,7 @@ class BeliefGame(Game):
         # TODO. Use self.game.delta() to define this function.
         #   Helper functions: `to_belief_id, to_belief_state` are already imported.
         new_states = list()
+        print(act)
         # P1 state
         if state.action == None and state.sigma == None:
             for action, sigma in act:

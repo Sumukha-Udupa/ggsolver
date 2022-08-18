@@ -19,7 +19,7 @@ class PolicePoachers(SG_PCOF):
 
     def __init__(self, grows, gcols, lion_pos, police_pos, police_time, sensors, sensor_pos, sensor_dim,
                  jungle_cells, p1_actions, p1_query, p2_attack, final_pos):
-        super(PolicePoachers, self).__init__()
+        super(PolicePoachers, self).__init__(is_tb=True, is_stoch=True, is_quant=False)
         # TODO. Define parameters to construct the game.
         # Gridworld dimensions.
         self.g_num_rows = grows
@@ -109,7 +109,7 @@ class PolicePoachers(SG_PCOF):
         return lion_actions
 
     def bouncy_boundary_gw(self, p1_state):
-        return max(min(p1_state.row, self.g_num_rows), 0), max(min(p1_state.col, self.g_num_cols), 0)
+        return max(min(p1_state.row, self.g_num_rows-1), 0), max(min(p1_state.col, self.g_num_cols-1), 0)
 
     def bouncy_boundary_jungle(self, p3_state, act):
         state = (p3_state.row, p3_state.col)
@@ -278,9 +278,11 @@ if __name__ == "__main__":
     game = PolicePoachers(grows, gcols, lion_pos, police_pos, police_time, sensors, sensor_pos, sensor_dim,
                           jungle_cells, p1_actions, p1_query, p2_attack, final_pos)
     # graph = game.graphify()
+    # from pprint import pprint
+    # pprint(list(graph["final"].items()))
     # graph.save("/path/to/file.game")
 
     # Belief game construction
     belief_game = BeliefGame(game)
-    # belief_graph = belief_game.graphify()
+    belief_graph = belief_game.graphify()
     # belief_game.save("/path/to/file.game")
