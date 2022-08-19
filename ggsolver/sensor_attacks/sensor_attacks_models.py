@@ -66,8 +66,10 @@ class BeliefGame(Game):
         self.sensor_query = self.game.sensor_queries
         self.sensor_attacks = self.game.sensor_attack
         # self.belief_game_actions = self.actions()
-        # self.final_states = self.final_states_set()
+        self._final_states = self.final_states_set()
+        self.observation_list = self.construct_observation_set()
         # self._states = self.states()
+
 
 
     # def obs_list(self, belief):
@@ -78,44 +80,59 @@ class BeliefGame(Game):
         belief_dash = set()
         belief_states = self.to_belief_state(belief)
         for st in belief_states:
-            next_states = self.game.delta(st, act)
-            if next_states != None:
-                belief_dash = belief_dash.union(set(next_states))
+            if st == State_n(BeliefGame.qF, BeliefGame.qF, None, None):
+                next_states = list()
+                next_states.append(State_n(BeliefGame.qF, BeliefGame.qF, None, None))
             else:
-                belief_dash = belief_dash
+                next_states = self.game.delta(st, act)
+                if next_states != None:
+                    belief_dash = belief_dash.union(set(next_states))
+                else:
+                    belief_dash = belief_dash
         belief_dash_id = self.to_belief_id(belief_dash)
         return belief_dash_id
 
     def to_belief_id(self, belief):
         # input a belief state and outputs a unique id for the belief state - binary converted to integer.
-        n = list()
-        for bel in range(len(self.game_states)):
-            if self.game_states[bel] in belief:
-                n.append(1)
-            else:
-                n.append(0)
+        if belief == BeliefGame.qF:
+            integer_belief_id = -99
+        else:
+            n = list()
+            states = self.game_states
+            states.append(State_n(BeliefGame.qF, BeliefGame.qF, None, None))
+            for bel in range(len(states)):
+                if states[bel] in belief:
+                    n.append(1)
+                else:
+                    n.append(0)
 
-        m = reversed(n)
-        binary_id = ''.join(map(str, m))
-        integer_belief_id = int(binary_id, 2)
+            m = reversed(n)
+            binary_id = ''.join(map(str, m))
+            integer_belief_id = int(binary_id, 2)
         return integer_belief_id
 
     def to_belief_state(self, belief_id):
         # input a unique belief state id to obtain the actual belief state
-        belief_states = list()
-        list_iteration_count = 0
-        res = [int(i) for i in bin(belief_id)[2:]]
-        for i in reversed(res):
-            if i == 1:
-                belief_states.append(self.game_states[list_iteration_count])
-                list_iteration_count = list_iteration_count+1
-            else:
-                list_iteration_count = list_iteration_count+1
+        if belief_id == -99:
+            belief_states = list()
+            belief_states.append(State_n(BeliefGame.qF, BeliefGame.qF, None, None))
+        else:
+            belief_states = list()
+            states = self.game_states
+            states.append(State_n(BeliefGame.qF, BeliefGame.qF, None, None))
+            list_iteration_count = 0
+            res = [int(i) for i in bin(belief_id)[2:]]
+            for i in reversed(res):
+                if i == 1:
+                    belief_states.append(states[list_iteration_count])
+                    list_iteration_count = list_iteration_count+1
+                else:
+                    list_iteration_count = list_iteration_count+1
 
-        # rev_res = reversed(res)
-        # for i in range(len(self.game_states)):
-        #     if rev_res[i] == 1:
-        #         belief_states.append(self.game_states[i])
+            # rev_res = reversed(res)
+            # for i in range(len(self.game_states)):
+            #     if rev_res[i] == 1:
+            #         belief_states.append(self.game_states[i])
 
         return belief_states
 
@@ -140,8 +157,8 @@ class BeliefGame(Game):
         # TODO. Construct the set of states using self.game.states().
         # P1 states
         Q_1  = list()
-        observation_list = self.construct_observation_set()
-        for (state_obs_list, sense_query, sense_attack), value in tqdm(observation_list.items()):
+        # observation_list = self.construct_observation_set()
+        for (state_obs_list, sense_query, sense_attack), value in tqdm(self.observation_list.items()):
             # Todo - implement the powerset(o-{s})
             # Player 1 nodes
             power_set_of_belief = powerset(value)
@@ -165,7 +182,8 @@ class BeliefGame(Game):
                     Q_2.append(State_n(s_dash, q0.belief, None, q0.sigma))
 
         # final state - CHECK just giving an integer for qF
-        final = State_n(BeliefGame.qF, -99, None, None)
+        belief_id_final_B = self.to_belief_id(BeliefGame.qF)
+        final = State_n(BeliefGame.qF, belief_id_final_B, None, None)
 
         # all the states
         Q = list()
@@ -209,28 +227,27 @@ class BeliefGame(Game):
         print(act)
         # P1 state
         if state.action == None and state.sigma == None:
-            for action, sigma in act:
-                belief_dash = self.post_belief(state.belief, action)
-                new_states.append(State_n(state, belief_dash, action, sigma))
+            belief_dash = self.post_belief(state.belief, act[0])
+            new_states.append(State_n(state.state, belief_dash, act[0], act[1]))
             return new_states
+
         # Nature player state
         elif state.action != None:
-            for action, sigma in act:
-                post_states = self.game.delta(state.state, action)
-                if set(post_states).issubset(self.final_states):
-                    new_states.append(State_n(BeliefGame.qF, -99, None, None))
-                    return new_states
-                elif len(set(post_states).intersection(self.final_states)) == 0:
-                    for st_dash in post_states:
-                        new_states.append(State_n(st_dash, state.belief, None, state.sigma))
-                    return new_states
-                else:
-                    for st_dash in post_states:
-                        new_states.append(State_n(st_dash, state.belief, None, state.sigma))
-                    new_states.append(State_n(BeliefGame.qF, -99, None, None))
-                    return new_states
+            post_states = self.game.delta(state.state, state.action)
+            if set(post_states).issubset(self._final_states):
+                new_states.append(State_n(BeliefGame.qF, -99, None, None))
+                return new_states
+            elif len(set(post_states).intersection(self._final_states)) == 0:
+                for st_dash in post_states:
+                    new_states.append(State_n(st_dash, state.belief, None, state.sigma))
+                return new_states
+            else:
+                for st_dash in post_states:
+                    new_states.append(State_n(st_dash, state.belief, None, state.sigma))
+                new_states.append(State_n(BeliefGame.qF, -99, None, None))
+                return new_states
         # P2 state - check
-        else:
+        elif state.action is None and type(act) != tuple:
             obs = self.game.observe(state.state, state.sigma, act)
             belief_set = set(self.to_belief_state(state.belief))
             belief_ddash = belief_set.intersection(set(obs))
