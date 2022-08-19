@@ -162,7 +162,8 @@ class PolicePoachers(SG_PCOF):
         """
         Returns a set of final states.
         """
-        return True if state.pol_pos in self.final_position else False
+        return True if state.pol_pos == self.final_position else False
+        # return True
 
     def sensors(self):
         """
